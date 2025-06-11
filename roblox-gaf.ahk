@@ -1,9 +1,10 @@
 #Requires AutoHotkey v2
 
+; Roblox window needs to be small as possible (800x600)
+
 HWNDs := WinGetList("ahk_exe RobloxPlayerBeta.exe")
 
 DllCall("SetProcessDpiAwarenessContext", "ptr", -4)
-
 
 get_window_coords(window_id) {
     rc := Buffer(16)
@@ -24,12 +25,6 @@ get_window_coords(window_id) {
     return {x: x, y: y, width: width, height: height, dpi: dpi}
 }
 
-scale_coords(coords, location_x, location_y) {
-    scaled_x := coords.x + Round((location_x / 800) * coords.width)
-    scaled_y := coords.y + Round((location_y / 600) * coords.height)
-    return {x: scaled_x, y: scaled_y}
-}
-
 show_window_coords(window_id) {
     coords := get_window_coords(window_id)
     x := coords.x
@@ -40,10 +35,25 @@ show_window_coords(window_id) {
     MsgBox "Client Area (Screen Coords):`nX: " x "`nY: " y "`nW: " width "`nH: " height "`nDPI: " dpi
 }
 
+move_mouse_to_coords(location_x, location_y) {
+    MouseMove(location_x, location_y + 1)
+    Sleep(1) ; Small delay to ensure the mouse moves correctly
+    MouseMove(location_x, location_y)
+}
+
+move_mouse_to_center(coords) {
+    center_x := coords.x + Round(coords.width / 2)
+    center_y := coords.y + Round(coords.height / 2)
+    move_mouse_to_coords(center_x, center_y)
+}
+
+move_mouse_to_top_left() {
+    move_mouse_to_coords(0, 0)
+}
+
 find_and_buy_item(coords, item) {
     Loop {
-        Send("{WheelDown}")
-        Sleep(1000) ;
+        move_mouse_to_center(coords)
         if ImageSearch(
             &TopLeftFoundImageX,
             &TopLeftFoundImageY,
@@ -54,41 +64,58 @@ find_and_buy_item(coords, item) {
             Format("*Trans0x4E2C1D *150 {:}.png", item)
         ) {
             ; Open the item to buy it
-            MouseMove(TopLeftFoundImageX, TopLeftFoundImageY + 19)
-            Sleep(1000) ;
-            MouseMove(TopLeftFoundImageX, TopLeftFoundImageY + 20)
-            Sleep(1000) ;
+            move_mouse_to_coords(TopLeftFoundImageX, TopLeftFoundImageY + 19)
             MouseClick("left")
             Sleep(1000) ;
-            MouseMove(290, 388) ; Move to the "Buy" button
-            Loop {
-                if ImageSearch(
-                    &TopLeftFoundImageX,
-                    &TopLeftFoundImageY,
-                    0,
-                    0,
-                    coords.width,
-                    coords.height,
-                    "*Trans0x6B6B6C *150 no_stock.png"
-                ) {
-                    Sleep (1000) ;
-                    MouseMove(405, 275) ; Move back to the sprinkler
-                    Sleep(1000) ;
-                    MouseMove(405, 276)
-                    MouseClick("left") ; Close the item
-                    break
-                }
-                MouseClick("left") ;
-                Sleep (1000) ;
-            }
-            break
+            move_mouse_to_top_left()
+            Sleep(500) ;
+            break ;
+        }
+        else {
+            Send("{WheelDown}")
+            Sleep(250) ;
+        }
+    }
+    Loop {
+        if ImageSearch(
+            &TopLeftNoStockX,
+            &TopLeftNoStockY,
+            0,
+            0,
+            coords.width,
+            coords.height,
+            "*Trans0x959595 *135 no_stock.png"
+        ) {
+            Sleep(500) ;
+            move_mouse_to_coords(TopLeftNoStockX, TopLeftNoStockY - 50)
+            MouseClick("left")
+            Sleep(500) ;
+            move_mouse_to_top_left()
+            Sleep(500) ;
+            break ;
+        }
+        if ImageSearch(
+            &TopLeftFoundImageX2,
+            &TopLeftFoundImageY2,
+            0,
+            0,
+            coords.width,
+            coords.height,
+            Format("*Trans0x4E2C1D *150 {:}.png", item)
+        ) {
+            ; Click the "Buy" button
+            move_mouse_to_coords(TopLeftFoundImageX2, TopLeftFoundImageY2 + 159)
+            MouseClick("left")
+            Sleep(500) ;
+            move_mouse_to_top_left()
+            Sleep(500) ;
         }
     }
 }
 
 F1:: {
     for window_id in HWNDs {
-        WinActivate("ahk_id " window_id)
+        WinActivate("ahk_id" window_id)
         show_window_coords(window_id)
     }
 
@@ -102,33 +129,34 @@ F2:: {
 
 ; buy items in store
 F3:: {
-    for window_id in HWNDs {
-        WinActivate("ahk_id " window_id)
-        coords := get_window_coords(window_id)
-        location_x := 400
-        location_y := 300
-        ;scaled_coords := scale_coords(coords, location_x, location_y)
-        MouseMove(400, 300, 1)
-        MouseMove(400, 301. 1)
-        ; find watering can image (top of the store)
-        Loop {
-            Send("{WheelUp}")
-            Sleep (50) ;
-            if ImageSearch(
-                &TopLeftFoundImageX,
-                &TopLeftFoundImageY,
-                0,
-                0,
-                coords.width,
-                coords.height,
-                "*Trans0x4E2C1D *150 watering_can.png"
-            ) {
-                ; found, now break so that we can scroll down to find the items we want to buy
-                break
+    Loop {
+        for window_id in HWNDs {
+            WinActivate("ahk_id" window_id)
+            coords := get_window_coords(window_id)
+            ; find watering can image (top of the store)
+            Loop {
+                move_mouse_to_center(coords)
+                Send("{WheelUp}")
+                Sleep(250) ;
+                if ImageSearch(
+                    &TopLeftFoundImageX,
+                    &TopLeftFoundImageY,
+                    0,
+                    0,
+                    coords.width,
+                    coords.height,
+                    "*Trans0x4E2C1D *150 watering_can.png"
+                ) {
+                    ; found, now break so that we can scroll down to find the items we want to buy
+                    break
+                }
             }
+            
+            ; find sprinklers
+            find_and_buy_item(coords, "basic_sprinkler")
+            find_and_buy_item(coords, "advanced_sprinkler")
+            find_and_buy_item(coords, "godly_sprinkler")
+            find_and_buy_item(coords, "master_sprinkler")
         }
-        
-        ; find sprinklers
-        find_and_buy_item(coords, "basic_sprinkler")
     }
 }
