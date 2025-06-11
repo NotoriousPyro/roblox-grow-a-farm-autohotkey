@@ -4,6 +4,9 @@
 
 HWNDs := WinGetList("ahk_exe RobloxPlayerBeta.exe")
 
+CoordMode("Pixel", "Client")
+CoordMode("Mouse", "Client")
+
 DllCall("SetProcessDpiAwarenessContext", "ptr", -4)
 
 get_window_coords(window_id) {
@@ -61,7 +64,7 @@ find_and_buy_item(coords, item) {
             0,
             coords.width,
             coords.height,
-            Format("*Trans0x4E2C1D *150 {:}.png", item)
+            Format("*Trans0x4E2C1D *175 {:}.png", item)
         ) {
             ; Open the item to buy it
             move_mouse_to_coords(TopLeftFoundImageX, TopLeftFoundImageY + 19)
@@ -73,7 +76,7 @@ find_and_buy_item(coords, item) {
         }
         else {
             Send("{WheelDown}")
-            Sleep(250) ;
+            Sleep(500) ;
         }
     }
     Loop {
@@ -101,7 +104,7 @@ find_and_buy_item(coords, item) {
             0,
             coords.width,
             coords.height,
-            Format("*Trans0x4E2C1D *150 {:}.png", item)
+            Format("*Trans0x4E2C1D *175 {:}.png", item)
         ) {
             ; Click the "Buy" button
             move_mouse_to_coords(TopLeftFoundImageX2, TopLeftFoundImageY2 + 159)
@@ -152,10 +155,12 @@ F3:: {
                 }
             }
             
-            ; find sprinklers
+            ; find items to buy
+            find_and_buy_item(coords, "watering_can")
             find_and_buy_item(coords, "basic_sprinkler")
             find_and_buy_item(coords, "advanced_sprinkler")
             find_and_buy_item(coords, "godly_sprinkler")
+            find_and_buy_item(coords, "lightning_rod")
             find_and_buy_item(coords, "master_sprinkler")
         }
     }
