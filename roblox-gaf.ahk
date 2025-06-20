@@ -1,6 +1,49 @@
 #Requires AutoHotkey v2
+#Include <OCR>
 
 ; Roblox window needs to be small as possible (800x600)
+
+; shop items must be in the same order as they appear in the shop
+
+; gear shop items
+first_gear_shop_item := "Watering Can" ; first item in the gear shop
+gear_shop_items := [
+    "Watering Can",
+    "Trowel",
+    "Recall Wrench",
+    "Basic Sprinkler",
+    "Advanced S", ; "Advanced Sprinkler - using Advanced S to avoid OCR issues with the full word"
+    "Godly Sprinkler",
+    "Lightning Rod",
+    "Master Sprinkler"
+]
+
+first_seed_shop_item := "Carrot" ; first item in the seed shop
+; seed shop items
+seed_shop_items := [
+    ; "Carrot",
+    ; "Strawberry",
+    ; "Blueberry",
+    ; "Orange Tulip",
+    ; "Tomato",
+    ; "Corn",
+    ; "Daffodil",
+    ; "Watermelon",
+    ; "Pumpkin",
+    ; "Apple",
+    ; "Bamboo",
+    ; "Coconut",
+    ; "Cactus",
+    ; "Dragon Fruit",
+    ; "Mango",
+    "Grape",
+    "Mushroom",
+    "Pepper",
+    "Cacao",
+    "Beanstalk",
+    "Ember Lily",
+    "Sugar Apple",
+]
 
 HWNDs := WinGetList("ahk_exe RobloxPlayerBeta.exe")
 
@@ -54,114 +97,105 @@ move_mouse_to_top_left() {
     move_mouse_to_coords(0, 0)
 }
 
+find_text(text, &foundX, &foundY) {
+    res := OCR.FromWindow("A")
+    try {
+        found := res.FindString(text)
+        foundX := found.x
+        foundY := found.y
+        return true
+    }
+    catch {
+        return false
+    }
+}
+
 find_and_buy_item(coords, item) {
+    count := 0
+    move_mouse_to_center(coords)
+    Sleep(1) ;
     Loop {
-        move_mouse_to_center(coords)
-        if ImageSearch(
-            &TopLeftFoundImageX,
-            &TopLeftFoundImageY,
-            0,
-            0,
-            coords.width,
-            coords.height,
-            Format("*Trans0x4E2C1D *175 {:}.png", item)
-        ) {
+        if find_text(item, &foundX, &foundY) {
             ; Open the item to buy it
-            move_mouse_to_coords(TopLeftFoundImageX, TopLeftFoundImageY + 19)
+            move_mouse_to_coords(foundX, foundY)
             MouseClick("left")
             Sleep(1000) ;
-            move_mouse_to_top_left()
-            Sleep(500) ;
             break ;
         }
         else {
+            move_mouse_to_center(coords)
             Send("{WheelDown}")
-            Sleep(500) ;
+            Sleep(250) ;
+            count += 1
+            if (count > 20) {
+                ; If we have scrolled down too much, break the loop
+                return ;
+            }
         }
     }
     Loop {
         if ImageSearch(
-            &TopLeftNoStockX,
-            &TopLeftNoStockY,
+            &BuyButtonX,
+            &BuyButtonY,
             0,
             0,
             coords.width,
             coords.height,
-            "*Trans0x959595 *135 no_stock.png"
-        ) {
-            Sleep(500) ;
-            move_mouse_to_coords(TopLeftNoStockX, TopLeftNoStockY - 50)
-            MouseClick("left")
-            Sleep(500) ;
-            move_mouse_to_top_left()
-            Sleep(500) ;
-            break ;
-        }
-        if ImageSearch(
-            &TopLeftFoundImageX2,
-            &TopLeftFoundImageY2,
-            0,
-            0,
-            coords.width,
-            coords.height,
-            Format("*Trans0x4E2C1D *175 {:}.png", item)
+            "*TransWhite *50 buy_button.png"
         ) {
             ; Click the "Buy" button
-            move_mouse_to_coords(TopLeftFoundImageX2, TopLeftFoundImageY2 + 159)
+            move_mouse_to_coords(BuyButtonX + 15, BuyButtonY + 15)
             MouseClick("left")
             Sleep(500) ;
-            move_mouse_to_top_left()
-            Sleep(500) ;
+        }
+        else {
+            ; If we can't find the buy button, break the loop
+            break ;
+        }
+    }
+}
+
+; buy items in store
+buy_items_in_store(store_items, first_item_in_store) {
+    Loop {
+        for window_id in HWNDs {
+            WinActivate(window_id)
+            coords := get_window_coords(window_id)
+            ; find watering can image (top of the store)
+            Loop {
+                move_mouse_to_center(coords)
+                Send("{WheelUp}")
+                Sleep(1) ;
+                if find_text(first_item_in_store, &foundX, &foundY) {
+                    break ;
+                }
+            }
+            
+            ; find items to buy
+            for item in store_items {
+                find_and_buy_item(coords, item)
+            }
         }
     }
 }
 
 F1:: {
     for window_id in HWNDs {
-        WinActivate("ahk_id" window_id)
+        WinActivate(window_id)
         show_window_coords(window_id)
     }
-
 }
 
 F2:: {
     Pause True  ;
     Suspend True  ;
 	Reload ;
-} ;
+}
 
-; buy items in store
 F3:: {
-    Loop {
-        for window_id in HWNDs {
-            WinActivate("ahk_id" window_id)
-            coords := get_window_coords(window_id)
-            ; find watering can image (top of the store)
-            Loop {
-                move_mouse_to_center(coords)
-                Send("{WheelUp}")
-                Sleep(250) ;
-                if ImageSearch(
-                    &TopLeftFoundImageX,
-                    &TopLeftFoundImageY,
-                    0,
-                    0,
-                    coords.width,
-                    coords.height,
-                    "*Trans0x4E2C1D *150 watering_can.png"
-                ) {
-                    ; found, now break so that we can scroll down to find the items we want to buy
-                    break
-                }
-            }
-            
-            ; find items to buy
-            find_and_buy_item(coords, "watering_can")
-            find_and_buy_item(coords, "basic_sprinkler")
-            find_and_buy_item(coords, "advanced_sprinkler")
-            find_and_buy_item(coords, "godly_sprinkler")
-            find_and_buy_item(coords, "lightning_rod")
-            find_and_buy_item(coords, "master_sprinkler")
-        }
-    }
+    buy_items_in_store(gear_shop_items, first_gear_shop_item)
+}
+
+F4:: {
+    buy_items_in_store(seed_shop_items, first_seed_shop_item)
 }
