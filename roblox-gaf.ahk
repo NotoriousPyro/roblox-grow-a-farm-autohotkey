@@ -1,49 +1,34 @@
 #Requires AutoHotkey v2
 #Include <OCR>
 
-; Roblox window needs to be small as possible (800x600)
+class Config {
+    first_item := ""
+    items := []
 
-; shop items must be in the same order as they appear in the shop
+    __New(section) {
+        this.load(section)
+    }
 
-; gear shop items
-first_gear_shop_item := "Watering Can" ; first item in the gear shop
-gear_shop_items := [
-    "Watering Can",
-    "Trowel",
-    "Recall Wrench",
-    "Basic Sprinkler",
-    "Advanced S", ; "Advanced Sprinkler - using Advanced S to avoid OCR issues with the full word"
-    "Godly Sprinkler",
-    "Lightning Rod",
-    "Master Sprinkler"
-]
+    load(section) {
+        raw := IniRead("config.ini", section)
+        for line in StrSplit(raw, "`n") {
+            line := Trim(line)
+            if (line != "") {
+                kv := StrSplit(line, "=")
+                k := Trim(kv[1])
+                v := Trim(StrSplit(kv[2], ";")[1])
+                if (k = "FirstItem") {
+                    this.first_item := v
+                } else if (k ~= "Item") {
+                    this.items.Push(v)
+                }
+            }
+        }
+    }
+}
 
-first_seed_shop_item := "Carrot" ; first item in the seed shop
-; seed shop items
-seed_shop_items := [
-    ; "Carrot",
-    ; "Strawberry",
-    ; "Blueberry",
-    ; "Orange Tulip",
-    ; "Tomato",
-    ; "Corn",
-    ; "Daffodil",
-    ; "Watermelon",
-    ; "Pumpkin",
-    ; "Apple",
-    ; "Bamboo",
-    ; "Coconut",
-    ; "Cactus",
-    ; "Dragon Fruit",
-    ; "Mango",
-    "Grape",
-    "Mushroom",
-    "Pepper",
-    "Cacao",
-    "Beanstalk",
-    "Ember Lily",
-    "Sugar Apple",
-]
+seed_shop_config := Config("SeedShop")
+gear_shop_config := Config("GearShop")
 
 HWNDs := WinGetList("ahk_exe RobloxPlayerBeta.exe")
 
@@ -97,10 +82,58 @@ move_mouse_to_top_left() {
     move_mouse_to_coords(0, 0)
 }
 
+LevenshteinSearchFunc(maxDistance, caseSense, haystack, needle, &foundstr) {
+    if StrLen(haystack) < StrLen(needle)
+        return 0
+    needleLen := StrLen(needle)
+
+    Loop StrLen(haystack) - StrLen(needle) + 1 {
+        firstChar := SubStr(haystack, A_Index, 1)
+        if firstChar ~= "\s"
+            continue
+
+        str := SubStr(haystack, A_Index, needleLen)
+        if LD(str, needle, caseSense) <= maxDistance {
+            foundstr := str
+            return A_index
+        }
+    }
+    return 0
+}
+
+; Credit: iPhilip, Source: https://www.autohotkey.com/boards/viewtopic.php?style=17&p=509167#p509167
+; https://en.wikipedia.org/wiki/Levenshtein_distance#Iterative_with_two_matrix_rows
+LD(Source, Target, CaseSense := True) {
+    if CaseSense ? Source == Target : Source = Target
+        return 0
+    Source := StrSplit(Source)
+    Target := StrSplit(Target)
+    if !Source.Length
+        return Target.Length
+    if !Target.Length
+        return Source.Length
+
+    v0 := [], v1 := []
+    loop Target.Length + 1
+        v0.Push(A_Index - 1)
+    v1.Length := v0.Length
+
+    for Index, SourceChar in Source {
+        v1[1] := Index
+        for TargetChar in Target
+            v1[A_Index + 1] := Min(v1[A_Index] + 1, v0[A_Index + 1] + 1, v0[A_Index] + (CaseSense ? SourceChar !==
+                TargetChar : SourceChar != TargetChar))
+        loop Target.Length + 1
+            v0[A_Index] := v1[A_Index]
+    }
+    return v1[Target.Length + 1]
+}
+
+
 find_text(text, &foundX, &foundY) {
     res := OCR.FromWindow("A")
     try {
-        found := res.FindString(text)
+        found := res.FindString(text, { SearchFunc: LevenshteinSearchFunc.Bind(1, false) })
         foundX := found.x
         foundY := found.y
         return true
@@ -110,29 +143,15 @@ find_text(text, &foundX, &foundY) {
     }
 }
 
-find_and_buy_item(coords, item) {
-    count := 0
-    move_mouse_to_center(coords)
-    Sleep(1) ;
-    Loop {
-        if find_text(item, &foundX, &foundY) {
-            ; Open the item to buy it
-            move_mouse_to_coords(foundX, foundY)
-            MouseClick("left")
-            Sleep(1000) ;
-            break ;
-        }
-        else {
-            move_mouse_to_center(coords)
-            Send("{WheelDown}")
-            Sleep(250) ;
-            count += 1
-            if (count > 20) {
-                ; If we have scrolled down too much, break the loop
-                return ;
-            }
-        }
+F5:: {
+    if find_text("Advanced Sprinkler", &foundX, &foundY) {
+        MsgBox "Found item at X: " foundX ", Y: " foundY
+        MouseMove(foundX, foundY)
     }
+}
+
+
+buy_item(coords, item) {
     Loop {
         if ImageSearch(
             &BuyButtonX,
@@ -150,13 +169,13 @@ find_and_buy_item(coords, item) {
         }
         else {
             ; If we can't find the buy button, break the loop
-            break ;
+            return ;
         }
     }
 }
 
 ; buy items in store
-buy_items_in_store(store_items, first_item_in_store) {
+buy_items_in_store(config) {
     Loop {
         for window_id in HWNDs {
             WinActivate(window_id)
@@ -166,14 +185,38 @@ buy_items_in_store(store_items, first_item_in_store) {
                 move_mouse_to_center(coords)
                 Send("{WheelUp}")
                 Sleep(1) ;
-                if find_text(first_item_in_store, &foundX, &foundY) {
+                if find_text(config.first_item, &foundX, &foundY) {
                     break ;
                 }
             }
-            
-            ; find items to buy
-            for item in store_items {
-                find_and_buy_item(coords, item)
+
+            count := 0
+            bought_items := Map()
+            move_mouse_to_center(coords)
+            Sleep(1) ;
+            Loop {
+                ; find items to buy
+                for item in config.items {
+                    if (bought_items.Has(item)) {
+                        continue ; Skip already bought items
+                    }
+                    if find_text(item, &foundX, &foundY) {
+                        ; Open the item to buy it
+                        move_mouse_to_coords(foundX, foundY)
+                        MouseClick("left")
+                        Sleep(1000) ;
+                        buy_item(coords, item)
+                        bought_items[item] := true
+                    }
+                }
+                move_mouse_to_center(coords)
+                Send("{WheelDown}")
+                Sleep(250) ;
+                count += 1
+                if (count > 20 or bought_items.Count >= config.items.Length) {
+                    ; If we have scrolled down too much, break the loop
+                    break ;
+                }
             }
         }
     }
@@ -189,13 +232,13 @@ F1:: {
 F2:: {
     Pause True  ;
     Suspend True  ;
-	Reload ;
+    Reload ;
 }
 
 F3:: {
-    buy_items_in_store(gear_shop_items, first_gear_shop_item)
+    buy_items_in_store(gear_shop_config)
 }
 
 F4:: {
-    buy_items_in_store(seed_shop_items, first_seed_shop_item)
+    buy_items_in_store(seed_shop_config)
 }
