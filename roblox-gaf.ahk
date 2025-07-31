@@ -249,7 +249,7 @@ buy_items_in_store(config_name) {
                 x: coords.x + 200, ; Adjust to remove the left side (containing shop button)
                 y: coords.y + 130, ; Adjust to remove the top side (containing the teleport buttons)
                 w: coords.w - 130, ; Adjust to remove the right side (containing the pet buttons), for consistency to match shop_y
-                h: coords.h - 180, ; Adjust to remove the bottom side (containing the hotbar)
+                h: coords.h - 80, ; Adjust to remove the bottom side (containing the hotbar)
             }
             Loop {
                 move_mouse_to_center(coords)
